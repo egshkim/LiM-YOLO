@@ -1,0 +1,49 @@
+# YOLOv9e P2/P3 detection heads only (P2 Head added, P5 head and backbone removed, P4 head removed)
+# Parameters
+nc: 80  # number of classes
+
+# GELAN backbone
+backbone:
+  - [-1, 1, nn.Identity, []]  # 0
+  - [-1, 1, Conv, [64, 3, 2]]  # 1-P1/2
+  - [-1, 1, Conv, [128, 3, 2]]  # 2-P2/4
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]  # 3
+  - [-1, 1, ADown, [256]]  # 4-P3/8
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]  # 5
+  - [-1, 1, ADown, [512]]  # 6-P4/16
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]  # 7 (P4 final)
+  
+  # Auxiliary branch
+  - [1, 1, CBLinear, [[64]]]  # 8
+  - [3, 1, CBLinear, [[64, 128]]]  # 9
+  - [5, 1, CBLinear, [[64, 128, 256]]]  # 10
+  - [7, 1, CBLinear, [[64, 128, 256, 512]]]  # 11
+  
+  - [0, 1, Conv, [64, 3, 2]]  # 12-P1/2
+  - [[8, 9, 10, 11, -1], 1, CBFuse, [[0, 0, 0, 0]]]  # 13
+  - [-1, 1, Conv, [128, 3, 2]]  # 14-P2/4
+  - [[9, 10, 11, -1], 1, CBFuse, [[1, 1, 1]]]  # 15
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]  # 16
+  - [-1, 1, ADown, [256]]  # 17-P3/8
+  - [[10, 11, -1], 1, CBFuse, [[2, 2]]]  # 18
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]  # 19
+  - [-1, 1, ADown, [512]]  # 20-P4/16
+  - [[11, -1], 1, CBFuse, [[3]]]  # 21
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]  # 22
+  - [-1, 1, SPPELAN, [512, 256]]  # 23
+
+# GELAN head (P4 head removed)
+head:
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]  # 24
+  - [[-1, 19], 1, Concat, [1]]  # 25 - cat with P3/8 feature
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]]  # 26 (P3/8-small)
+  
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]  # 27
+  - [[-1, 16], 1, Concat, [1]]  # 28 - cat with P2/4 feature
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 2]]  # 29 (P2/4-xsmall)
+  
+  - [-1, 1, ADown, [128]]  # 30
+  - [[-1, 26], 1, Concat, [1]]  # 31 - cat head P3
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]]  # 32 (P3/8-small final)
+  
+  - [[29, 32], 1, OBB, [nc, 1]]  # 33 - OBB(P2, P3)
