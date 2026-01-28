@@ -12,10 +12,6 @@ This repository is the **official implementation** of the paper:
 
 **LiM-YOLO** is a specialized object detector designed for maritime targets in high-resolution satellite imagery. By analyzing the scale distribution of ships, we propose a **Pyramid Level Shift (P2-P4)** strategy to resolve feature dilution of small vessels and remove the redundant P5 layer. Additionally, we introduce a **Group Normalized Auxiliary Branch (GN-CBLinear)** to stabilize training under micro-batch settings.
 
-<div align="center">
-  <img src="https://github.com/egshkim/LiM-YOLO/assets/your_image_path_here.png" width="800">
-</div>
-
 ## 📂 Model Configuration
 
 The core configuration file for the proposed **LiM-YOLO** model can be found at:
