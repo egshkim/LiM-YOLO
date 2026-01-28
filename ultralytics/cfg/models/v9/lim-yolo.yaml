@@ -1,8 +1,8 @@
 # LiM-YOLO 🚀 AGPL-3.0 License - https://github.com/egshkim/LiM-YOLO
 # 
 # Copyright (c) 2025 Seon-Hoon Kim (KARI/UST). All rights reserved.
-# Proposed Method: "Less is More with Pyramid Level Shift..." - https://arxiv.org/pdf/2512.09700
-#
+# Paper link: https://arxiv.org/pdf/2512.09700
+# Paper title: LiM-YOLO: Less is More with Pyramid Level Shift and Normalized Auxiliary Branch  for Ship Detection in Optical Remote Sensing Imagery
 # -----------------------------------------------------------------------
 # Based on Ultralytics YOLOv9 (AGPL-3.0 License) - https://ultralytics.com
 # Original Config: YOLOv9e object detection model
