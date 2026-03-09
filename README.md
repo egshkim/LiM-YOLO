@@ -1,7 +1,7 @@
 # LiM-YOLO: Less is More with Pyramid Level Shift and Normalized Auxiliary Branch for Ship Detection
 
 [![arXiv](https://img.shields.io/badge/arXiv-2512.09700-b31b1b.svg)](https://doi.org/10.48550/arXiv.2512.09700)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 This repository is the **official implementation** of the paper:
 > **LiM-YOLO: Less is More with Pyramid Level Shift and Normalized Auxiliary Branch for Ship Detection in Optical Remote Sensing Imagery**
@@ -10,7 +10,7 @@ This repository is the **official implementation** of the paper:
 
 ## Introduction
 
-**LiM-YOLO** is a specialized object detector designed for maritime targets in high-resolution satellite imagery. By analyzing the scale distribution of ships, we propose a **Pyramid Level Shift (P2-P4)** strategy to resolve feature dilution of small vessels and remove the redundant P5 layer. Additionally, we introduce a **Group Normalized Auxiliary Branch (GN-CBLinear)** to stabilize training under micro-batch settings.
+**LiM-YOLO** is a specialized object detector designed for maritime targets in high-resolution satellite imagery. By analyzing the scale distribution of ships across four major benchmarks, we propose a **Pyramid Level Shift (P2–P4)** strategy that introduces a high-resolution P2 head while pruning the redundant P5 layer, resolving spatial feature dilution for small vessels. Additionally, we introduce **GN-CBLinear**, which appends Group Normalization after the 1×1 convolution in the auxiliary branch of YOLOv9's Programmable Gradient Information (PGI) framework, stabilizing training under micro-batch constraints imposed by high-resolution satellite inputs.
 
 ## Datasets
 
@@ -84,9 +84,9 @@ ultralytics/cfg/models/v9/lim-yolo.yaml
 ```
 
 This configuration includes:
-* **P2-P4 Head Structure**: Optimized for small ship detection (Stride 4, 8, 16).
-* **Pruned P5**: Removed stride-32 layers to reduce computational redundancy.
-* **GN-CBLinear**: Group Normalization added to the programmable gradient information (PGI) branch.
+* **P2–P4 Head Structure**: Optimized for small ship detection (Stride 4, 8, 16).
+* **Pruned P5**: Removed stride-32 backbone and head to eliminate receptive field redundancy.
+* **GN-CBLinear**: Group Normalization appended after the 1×1 convolution in the PGI auxiliary branch, following the standard Conv→GN ordering.
 
 ## Installation
 
@@ -119,11 +119,10 @@ results = model.train(
     optimizer="Adam",
     lr0=0.001,
     lrf=0.0001,
-    dropout=0.2,
     seed=0,
     pretrained=False,
     single_cls=False,                 # Set True for single-class datasets
-    # Disable color augmentations (as used in the paper)
+    # Disable augmentations (as used in the paper)
     hsv_h=0.0,
     hsv_s=0.0,
     hsv_v=0.0,
@@ -147,7 +146,6 @@ yolo obb train \
     optimizer=Adam \
     lr0=0.001 \
     lrf=0.0001 \
-    dropout=0.2 \
     seed=0 \
     pretrained=False \
     hsv_h=0.0 hsv_s=0.0 hsv_v=0.0 \
@@ -174,10 +172,10 @@ names:
 
 ### Training Notes
 
-- **Batch size**: We used `batch=2` with 1024x1024 input resolution on a single GPU. Adjust according to your GPU memory.
+- **Batch size**: We used `batch=2` with 1024×1024 input resolution on a single NVIDIA RTX A6000 (48 GB). Adjust according to your GPU memory.
 - **Augmentations**: Color augmentations (`hsv_h`, `hsv_s`, `hsv_v`) and additional augmentations (`augment`) are disabled by default to match the paper's settings.
 - **Multi-GPU**: Pass a list of device ids (e.g., `device=[0,1]`) for data-parallel training.
-- **Optimizer**: Adam with an initial learning rate of `0.001` and final learning rate ratio of `0.0001`.
+- **Optimizer**: Adam with an initial learning rate of `0.001` decayed to `0.0001` over 100 epochs via cosine annealing.
 
 ## Inference
 
@@ -248,7 +246,7 @@ model.export(format="onnx", imgsz=1024)
 
 ### Comparison with State-of-the-Art Models
 
-Evaluated on the integrated ship detection dataset (all four datasets combined). The best results are highlighted in **bold**.
+Evaluated on the Integrated Ship Detection Dataset (all four datasets combined). The best results are highlighted in **bold**.
 
 | Model | Params (M) | GFLOPs | Speed (ms/img) | F1 | Precision | Recall | mAP<sup>50</sup> | mAP<sup>50-95</sup> |
 |:------|:----------:|:------:|:---------------:|:---:|:---------:|:------:|:-----------------:|:--------------------:|
@@ -259,7 +257,7 @@ Evaluated on the integrated ship detection dataset (all four datasets combined).
 | RT-DETR-X | 70.38 | 278.2 | 19.8 | 0.755 | 0.819 | 0.699 | 0.793 | 0.545 |
 | **LiM-YOLO (Ours)** | **21.16** | **189.4** | **26.7** | **0.791** | **0.839** | **0.748** | **0.832** | **0.600** |
 
-<p align="center"><em>Table VIII from the paper: Comparison with state-of-the-art models on the integrated ship detection dataset.</em></p>
+<p align="center"><em>Table VIII from the paper: Comparison with state-of-the-art models on the Integrated Ship Detection Dataset.</em></p>
 
 ### Qualitative Results
 
@@ -296,7 +294,7 @@ Evaluated on the integrated ship detection dataset (all four datasets combined).
   </tr>
 </table>
 
-<p align="center"><em>Figure 8 from the paper: Qualitative comparison of detection results across four remote sensing datasets. Oriented Bounding Boxes (OBB) are overlaid on the images. For single-class datasets, class labels and confidence scores are omitted for visual clarity.</em></p>
+<p align="center"><em>Fig. 6 from the paper: Qualitative comparison of detection results across four remote sensing datasets. OBBs are overlaid on the images. For single-class datasets, class labels and confidence scores are omitted for clarity.</em></p>
 
 ## Citation
 
@@ -313,8 +311,8 @@ If you find this work useful, please cite our paper:
 
 ## License
 
-This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
+This project is licensed under the [AGPL-3.0 License](https://www.gnu.org/licenses/agpl-3.0), consistent with the [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) framework.
 
 ## Acknowledgments
 
-This implementation is built on top of [Ultralytics](https://github.com/ultralytics/ultralytics). We thank the Ultralytics team for their excellent YOLO framework.
+This research was supported by Korea Institute of Marine Science & Technology Promotion (KIMST) funded by the Korea Coast Guard (RS-2023-00238652). This implementation is built on top of [Ultralytics](https://github.com/ultralytics/ultralytics).
