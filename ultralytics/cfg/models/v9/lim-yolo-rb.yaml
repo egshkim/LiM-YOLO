@@ -1,0 +1,89 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+#
+# LiM-YOLO-RB (Reversible Branch)
+# =====================================================================
+# LiM-YOLO with YOLOv9's auxiliary reversible branch restored. The
+# Ultralytics YOLOv9-E port omits this branch. It is re-added here
+# following the original WongKinYiu/yolov9 implementation
+# (https://github.com/WongKinYiu/yolov9). The reversible branch supplies
+# reliable gradients during training and is removed at inference.
+#
+# Architecture: LiM-YOLO body (P2 P3 P4 heads, 512c, GN-CBLinear) with a
+# dual head (DualOBB) that adds an auxiliary mini-FPN (the reversible
+# branch) alongside the main FPN. Detection strides are (4, 8, 16).
+#
+# Validation
+#   from ultralytics import YOLO
+#   m = YOLO("ultralytics/cfg/models/v9/lim-yolo-rb.yaml", task="obb")
+#   assert tuple(m.model.stride.tolist()) == (4.0, 8.0, 16.0)
+
+# Parameters
+nc: 80  # number of classes
+
+# GELAN backbone (simple-bb ends at P4; integration chain ends at P4)
+backbone:
+  - [-1, 1, nn.Identity, []]  # 0
+  - [-1, 1, Conv, [64, 3, 2]]  # 1-P1/2
+  - [-1, 1, Conv, [128, 3, 2]]  # 2-P2/4
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]  # 3
+  - [-1, 1, ADown, [256]]  # 4-P3/8
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]  # 5
+  - [-1, 1, ADown, [512]]  # 6-P4/16
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]  # 7 (simple-bb P4 final, LiM width 512c)
+
+  # CBLinear taps from simple-bb (GN-CBLinear; 4 taps; P5 tap dropped vs canonical 5 taps)
+  - [1, 1, CBLinear_GN_woSILU, [[64]]]  # 8  - P1 tap
+  - [3, 1, CBLinear_GN_woSILU, [[64, 128]]]  # 9  - P2 tap
+  - [5, 1, CBLinear_GN_woSILU, [[64, 128, 256]]]  # 10 - P3 tap
+  - [7, 1, CBLinear_GN_woSILU, [[64, 128, 256, 512]]]  # 11 - P4 tap
+
+  # Integration chain (CBFuse 4 times; canonical's 5th CBFuse at P5 dropped)
+  - [0, 1, Conv, [64, 3, 2]]  # 12-P1/2
+  - [[8, 9, 10, 11, -1], 1, CBFuse, [[0, 0, 0, 0]]]  # 13 - fuse at P1
+  - [-1, 1, Conv, [128, 3, 2]]  # 14-P2/4
+  - [[9, 10, 11, -1], 1, CBFuse, [[1, 1, 1]]]  # 15 - fuse at P2
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]  # 16 (integration P2)
+  - [-1, 1, ADown, [256]]  # 17-P3/8
+  - [[10, 11, -1], 1, CBFuse, [[2, 2]]]  # 18 - fuse at P3
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]  # 19 (integration P3)
+  - [-1, 1, ADown, [512]]  # 20-P4/16
+  - [[11, -1], 1, CBFuse, [[3]]]  # 21 - fuse at P4
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]  # 22 (integration P4, LiM width 512c)
+
+# GELAN head — two branches: auxiliary mini-FPN (reversible branch) + main FPN
+head:
+  # =====================================================================
+  # Auxiliary mini-FPN (the reversible branch; training-time supervision only)
+  # Shifted one stride finer: A4 (s=16) <- A3 (s=8) <- A2 (s=4)
+  # Taps simple-bb at layers 7 (P4), 5 (P3), 3 (P2)
+  # =====================================================================
+  - [7, 1, SPPELAN, [512, 256]]  # 23 (A4: from simple-bb P4)
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]  # 24
+  - [[-1, 5], 1, Concat, [1]]  # 25 - cat simple-bb P3 (layer 5)
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]]  # 26 (A3)
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]  # 27
+  - [[-1, 3], 1, Concat, [1]]  # 28 - cat simple-bb P2 (layer 3)
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 2]]  # 29 (A2)
+
+  # =====================================================================
+  # Main FPN (top-down to P2, then bottom-up back to P4)
+  # Taps integration chain at layer 22 (P4)
+  # =====================================================================
+  - [22, 1, SPPELAN, [512, 256]]  # 30 (main P4-SPPELAN, from integration P4)
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]  # 31
+  - [[-1, 19], 1, Concat, [1]]  # 32 - cat integration P3 (layer 19)
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]]  # 33 (top-down intermediate at P3)
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]  # 34
+  - [[-1, 16], 1, Concat, [1]]  # 35 - cat integration P2 (layer 16)
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 2]]  # 36 (main P2/4-xsmall, top-down endpoint)
+
+  - [-1, 1, ADown, [128]]  # 37
+  - [[-1, 33], 1, Concat, [1]]  # 38 - cat head P3 (layer 33)
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]]  # 39 (main P3/8-small)
+
+  - [-1, 1, ADown, [256]]  # 40
+  - [[-1, 30], 1, Concat, [1]]  # 41 - cat head P4-SPPELAN (layer 30)
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]  # 42 (main P4/16-medium)
+
+  # DualOBB(A2, A3, A4, main_P2, main_P3, main_P4); 6 inputs, strides [4,8,16,4,8,16]
+  - [[29, 26, 23, 36, 39, 42], 1, DualOBB, [nc, 1]]  # 43

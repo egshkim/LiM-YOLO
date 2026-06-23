@@ -1118,6 +1118,55 @@ class v8OBBLoss(v8DetectionLoss):
         return ang_loss.sum() / target_scores_sum
 
 
+class v8DualOBBLoss:
+    """Criterion class for computing dual-head OBB training losses (PGI mechanism).
+
+    Uses two v8OBBLoss instances for main and auxiliary branches. Weighting follows
+    WongKinYiu/yolov9 `utils/loss_tal_dual.py:ComputeLoss`: main branch × 1.0,
+    auxiliary branch × 0.25. The main branch is the one used at inference, so it
+    receives the full gradient; the auxiliary branch is deep supervision for the
+    CBLinear/CBFuse auxiliary backbone.
+
+    Reference:
+        YOLOv9: Learning What You Want to Learn Using Programmable Gradient Information
+        (https://arxiv.org/abs/2402.13616)
+    """
+
+    def __init__(self, model):
+        """Initialize v8DualOBBLoss with main and auxiliary v8OBBLoss instances."""
+        self.main_loss = v8OBBLoss(model)
+        self.aux_loss = v8OBBLoss(model)
+        self.main_weight = 1.0
+        self.aux_weight = 0.25
+
+    def __call__(
+        self,
+        preds: Any,
+        batch: dict[str, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Calculate weighted sum of main and auxiliary OBB losses.
+
+        Args:
+            preds: Tuple of (main_preds_dict, aux_preds_dict) from DualOBB during training,
+                   or (inference_output, preds_dict) tuple during validation.
+            batch: Batch dict with 'batch_idx', 'cls', 'bboxes' keys.
+
+        Returns:
+            Tuple of (weighted_loss_sum, weighted_loss_items) with 4 components: box, cls, dfl, angle.
+        """
+        # During validation, preds is (inference_output, preds_dict) — fall back to main loss only
+        if isinstance(preds, tuple) and len(preds) == 2 and not isinstance(preds[0], dict):
+            return self.main_loss(preds, batch)
+
+        main_preds, aux_preds = preds
+        main_result = self.main_loss.loss(main_preds, batch)
+        aux_result = self.aux_loss.loss(aux_preds, batch)
+
+        total_loss = main_result[0] * self.main_weight + aux_result[0] * self.aux_weight
+        total_items = main_result[1] * self.main_weight + aux_result[1] * self.aux_weight
+        return total_loss, total_items
+
+
 class E2EDetectLoss:
     """Criterion class for computing training losses for end-to-end detection."""
 

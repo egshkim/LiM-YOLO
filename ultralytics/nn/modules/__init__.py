@@ -78,6 +78,7 @@ from .conv import (
     SpatialAttention,
 )
 from .head import (
+    DualOBB,
     OBB,
     OBB26,
     Classify,
@@ -119,6 +120,7 @@ __all__ = (
     "DFL",
     "ELAN1",
     "MLP",
+    "DualOBB",
     "OBB",
     "OBB26",
     "PSA",

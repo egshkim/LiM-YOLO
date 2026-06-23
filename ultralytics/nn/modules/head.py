@@ -20,7 +20,7 @@ from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
 
-__all__ = "OBB", "Classify", "Detect", "Pose", "RTDETRDecoder", "Segment", "YOLOEDetect", "YOLOESegment", "v10Detect"
+__all__ = "DualOBB", "OBB", "Classify", "Detect", "Pose", "RTDETRDecoder", "Segment", "YOLOEDetect", "YOLOESegment", "v10Detect"
 
 
 class Detect(nn.Module):
@@ -509,6 +509,131 @@ class OBB(Detect):
     def fuse(self) -> None:
         """Remove the one2many head for inference optimization."""
         self.cv2 = self.cv3 = self.cv4 = None
+
+
+class DualOBB(OBB):
+    """Dual OBB detection head with auxiliary branch for PGI (Programmable Gradient Information) training.
+
+    During training, processes both main and auxiliary branch feature maps and returns two prediction dicts.
+    During inference, only the main branch is used, producing output identical to OBB.
+
+    The auxiliary branch provides direct supervision to the CBLinear/CBFuse auxiliary backbone, weighted 4x
+    heavier than the main branch loss (aux=1.0, main=0.25) per the YOLOv9 PGI mechanism.
+
+    Attributes:
+        cv2_aux (nn.ModuleList): Auxiliary branch box regression convolutions.
+        cv3_aux (nn.ModuleList): Auxiliary branch classification convolutions.
+        cv4_aux (nn.ModuleList): Auxiliary branch angle prediction convolutions.
+        dfl2 (nn.Module): Auxiliary branch DFL module.
+
+    Reference:
+        YOLOv9: Learning What You Want to Learn Using Programmable Gradient Information
+        (https://arxiv.org/abs/2402.13616)
+    """
+
+    def __init__(self, nc: int = 80, ne: int = 1, reg_max=16, end2end=False, ch: tuple = ()):
+        """Initialize DualOBB with main and auxiliary branch channels.
+
+        Args:
+            nc (int): Number of classes.
+            ne (int): Number of extra parameters (angle dimensions).
+            reg_max (int): Maximum number of DFL channels.
+            end2end (bool): Whether to use end-to-end NMS-free detection (not used for dual).
+            ch (tuple): Channel sizes, first half = auxiliary branch, second half = main branch.
+        """
+        assert len(ch) % 2 == 0, f"DualOBB requires even number of channel entries, got {len(ch)}"
+        half = len(ch) // 2
+        ch_main = ch[half:]
+        ch_aux = ch[:half]
+
+        # Initialize parent OBB with main branch channels
+        super().__init__(nc, ne, reg_max, end2end, ch_main)
+
+        # Override main branch box regression conv to match YOLOv9 DualDDetect:
+        # second 3x3 and final 1x1 use groups=4 (one group per bbox coordinate l/t/r/b).
+        c2_main = max((16, ch_main[0] // 4, self.reg_max * 4))
+        self.cv2 = nn.ModuleList(
+            nn.Sequential(Conv(x, c2_main, 3), Conv(c2_main, c2_main, 3, g=4), nn.Conv2d(c2_main, 4 * self.reg_max, 1, groups=4))
+            for x in ch_main
+        )
+
+        # Build auxiliary branch detection convolutions (mirroring parent's cv2/cv3/cv4)
+        c2 = max((16, ch_aux[0] // 4, self.reg_max * 4))
+        c3 = max(ch_aux[0], min(self.nc, 100))
+        c4 = max(ch_aux[0] // 4, self.ne)
+        self.cv2_aux = nn.ModuleList(
+            nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3, g=4), nn.Conv2d(c2, 4 * self.reg_max, 1, groups=4))
+            for x in ch_aux
+        )
+        self.cv3_aux = nn.ModuleList(
+            nn.Sequential(
+                nn.Sequential(DWConv(x, x, 3), Conv(x, c3, 1)),
+                nn.Sequential(DWConv(c3, c3, 3), Conv(c3, c3, 1)),
+                nn.Conv2d(c3, self.nc, 1),
+            )
+            for x in ch_aux
+        )
+        self.cv4_aux = nn.ModuleList(
+            nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.ne, 1)) for x in ch_aux
+        )
+        self.dfl2 = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
+
+    def forward(self, x):
+        """Forward pass processing 2*nl feature maps: first nl from auxiliary, last nl from main.
+
+        Args:
+            x (list[torch.Tensor]): Feature maps, length 2*nl. First nl = auxiliary, last nl = main.
+
+        Returns:
+            Training: tuple of (main_preds_dict, aux_preds_dict), each with keys
+                      'boxes', 'scores', 'angle', 'feats'.
+            Inference: Same output format as OBB (only main branch).
+        """
+        aux_feats = x[: self.nl]
+        main_feats = x[self.nl :]
+
+        if not self.training:
+            # Inference: delegate to parent OBB with main branch only
+            return OBB.forward(self, main_feats)
+
+        # Training: process both branches
+        # Main branch using parent's forward_head (cv2, cv3, cv4)
+        main_preds = self.forward_head(main_feats, **self.one2many)
+
+        # Auxiliary branch
+        bs = aux_feats[0].shape[0]
+        aux_boxes = torch.cat(
+            [self.cv2_aux[i](aux_feats[i]).view(bs, 4 * self.reg_max, -1) for i in range(self.nl)], dim=-1
+        )
+        aux_scores = torch.cat(
+            [self.cv3_aux[i](aux_feats[i]).view(bs, self.nc, -1) for i in range(self.nl)], dim=-1
+        )
+        aux_angle = torch.cat(
+            [self.cv4_aux[i](aux_feats[i]).view(bs, self.ne, -1) for i in range(self.nl)], 2
+        )
+        aux_angle = (aux_angle.sigmoid() - 0.25) * math.pi  # [-pi/4, 3pi/4]
+        aux_preds = dict(boxes=aux_boxes, scores=aux_scores, angle=aux_angle, feats=aux_feats)
+
+        return main_preds, aux_preds
+
+    def bias_init(self):
+        """Initialize Detect() biases for both main and auxiliary branches."""
+        super().bias_init()
+        # Auxiliary branch bias init
+        for i in range(self.nl):
+            self.cv2_aux[i][-1].bias.data[:] = 2.0  # box
+            self.cv3_aux[i][-1].bias.data[: self.nc] = math.log(
+                5 / self.nc / (640 / self.stride[i]) ** 2
+            )
+
+    def fuse(self) -> None:
+        """Remove auxiliary branch for deployment, keep only main branch.
+
+        Note: Unlike parent OBB.fuse() which removes one2many head (for end2end models),
+        DualOBB.fuse() only removes the auxiliary detection convolutions. The main branch
+        (cv2, cv3, cv4) is preserved for inference.
+        """
+        del self.cv2_aux, self.cv3_aux, self.cv4_aux, self.dfl2
 
 
 class OBB26(OBB):

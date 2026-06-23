@@ -18,6 +18,7 @@ from ultralytics.nn.modules import (
     C2PSA,
     C3,
     C3TR,
+    DualOBB,
     ELAN1,
     OBB,
     OBB26,
@@ -81,6 +82,7 @@ from ultralytics.utils.loss import (
     PoseLoss26,
     v8ClassificationLoss,
     v8DetectionLoss,
+    v8DualOBBLoss,
     v8OBBLoss,
     v8PoseLoss,
     v8SegmentationLoss,
@@ -402,6 +404,8 @@ class DetectionModel(BaseModel):
             def _forward(x):
                 """Perform a forward pass through the model, handling different Detect subclass types accordingly."""
                 output = self.forward(x)
+                if isinstance(output, tuple) and isinstance(output[0], dict):
+                    output = output[0]  # DualOBB: main branch preds dict
                 if self.end2end:
                     output = output["one2many"]
                 return output["feats"]
@@ -542,6 +546,8 @@ class OBBModel(DetectionModel):
 
     def init_criterion(self):
         """Initialize the loss criterion for the model."""
+        if isinstance(self.model[-1], DualOBB):
+            return v8DualOBBLoss(self)
         return E2ELoss(self, v8OBBLoss) if getattr(self, "end2end", False) else v8OBBLoss(self)
 
 
@@ -1684,12 +1690,13 @@ def parse_model(d, ch, verbose=True):
                 Pose26,
                 OBB,
                 OBB26,
+                DualOBB,
             }
         ):
             args.extend([reg_max, end2end, [ch[x] for x in f]])
             if m is Segment or m is YOLOESegment or m is Segment26 or m is YOLOESegment26:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
+            if m in {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26, DualOBB}:
                 m.legacy = legacy
         elif m is v10Detect:
             args.append([ch[x] for x in f])

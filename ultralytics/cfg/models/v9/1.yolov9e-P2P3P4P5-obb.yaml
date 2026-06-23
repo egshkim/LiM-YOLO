@@ -1,4 +1,6 @@
-# YOLOv9e P2/P3/P4/P5 heads (P2 Head added)
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+#
+# YOLOv9-E OBB with P2 P3 P4 P5 detection heads. Based on the Ultralytics YOLOv9-E port.
 # Parameters
 nc: 80 # number of classes
 
@@ -52,15 +54,15 @@ head:
   - [-1, 1, RepNCSPELAN4, [128, 128, 64, 2]] # 38 (P2/4-xsmall)
 
   - [-1, 1, ADown, [128]]
-  - [[-1, 35], 1, Concat, [1]] # cat head P4
+  - [[-1, 35], 1, Concat, [1]] # cat head P3
   - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]] # 41 (P3/8-small)
 
   - [-1, 1, ADown, [256]]
   - [[-1, 32], 1, Concat, [1]] # cat head P4
-  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]] # 38+6=44 (P4/16-medium)
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]] # 44 (P4/16-medium)
 
   - [-1, 1, ADown, [512]]
   - [[-1, 29], 1, Concat, [1]] # cat head P5
-  - [-1, 1, RepNCSPELAN4, [512, 1024, 512, 2]] # 41+6=47 (P5/32-large)
+  - [-1, 1, RepNCSPELAN4, [512, 1024, 512, 2]] # 47 (P5/32-large)
 
   - [[38, 41, 44, 47], 1, OBB, [nc, 1]] # OBB(P2, P3, P4, P5)

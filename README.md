@@ -1,92 +1,28 @@
-# LiM-YOLO: Less is More with Pyramid Level Shift and Normalized Auxiliary Branch for Ship Detection
+# LiM-YOLO: Less is More with Pyramid Level Shift for Ship Detection in Optical Remote Sensing
 
 [![arXiv](https://img.shields.io/badge/arXiv-2512.09700-b31b1b.svg)](https://doi.org/10.48550/arXiv.2512.09700)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-This repository is the **official implementation** of the paper:
-> **LiM-YOLO: Less is More with Pyramid Level Shift and Normalized Auxiliary Branch for Ship Detection in Optical Remote Sensing Imagery**
-> *Seon-Hoon Kim, Hyeji Sim, Youeyun Jung, Okchul Jung, and Yerin Kim*
-> Available on arXiv: [https://doi.org/10.48550/arXiv.2512.09700](https://doi.org/10.48550/arXiv.2512.09700)
+This repository is the **official implementation** of the following paper.
+> **LiM-YOLO: Less is More with Pyramid Level Shift for Ship Detection in Optical Remote Sensing**
+> *Seon-Hoon Kim, Yerin Kim, Hyeji Sim, Youeyun Jung, Ok-Chul Jung, Daewon Chung*
+> [arXiv 2512.09700](https://doi.org/10.48550/arXiv.2512.09700)
 
 ## Introduction
 
-**LiM-YOLO** is a specialized object detector designed for maritime targets in high-resolution satellite imagery. By analyzing the scale distribution of ships across four major benchmarks, we propose a **Pyramid Level Shift (P2–P4)** strategy that introduces a high-resolution P2 head while pruning the redundant P5 layer, resolving spatial feature dilution for small vessels. Additionally, we introduce **GN-CBLinear**, which appends Group Normalization after the 1×1 convolution in the auxiliary branch of YOLOv9's Programmable Gradient Information (PGI) framework, stabilizing training under micro-batch constraints imposed by high-resolution satellite inputs.
+**LiM-YOLO** is an oriented ship detector for high-resolution optical satellite imagery, built on YOLOv9-E. Ships are small and high-aspect-ratio, and the stride-32 pyramid level (P₅) compresses narrow vessels into sub-pixel features. LiM-YOLO applies a **Pyramid Level Shift** that moves the detection heads from P₃P₄P₅ (strides 8/16/32) to P₂P₃P₄ (strides 4/8/16). This adds a high-resolution P₂ head and removes the P₅ head and backbone stage. It also adds a **GN-CBLinear** module that places Group Normalization after the 1×1 convolution in the YOLOv9 auxiliary projection, which stabilizes training under the micro-batch regime required by 1024×1024 satellite tiles.
 
-## Datasets
+This repository also provides **LiM-YOLO-RB** (Reversible Branch) and **LiM-YOLO-RB-W** (Reversible Branch, Wide), two extensions that restore YOLOv9's auxiliary reversible branch (see [Models](#models)).
 
-We evaluate LiM-YOLO across four remote sensing datasets covering diverse satellite platforms and resolutions. All annotations are in **Oriented Bounding Box (OBB)** format.
+## Models
 
-<table>
-  <tr>
-    <th>Dataset</th>
-    <th>Source Platform</th>
-    <th>Resolution (GSD)</th>
-    <th># Train Images</th>
-    <th># Train Instances</th>
-    <th># Val Images</th>
-    <th># Val Instances</th>
-  </tr>
-  <tr>
-    <td>SODA-A</td>
-    <td>Google Earth</td>
-    <td>0.5m – 0.8m</td>
-    <td>1,030</td>
-    <td>37,971</td>
-    <td>323</td>
-    <td>21,908</td>
-  </tr>
-  <tr>
-    <td>DOTA-v1.5</td>
-    <td>Google Earth, GF-2, JL-1</td>
-    <td>0.3m – 0.6m</td>
-    <td>2,657</td>
-    <td>56,313</td>
-    <td>572</td>
-    <td>11,474</td>
-  </tr>
-  <tr>
-    <td>FAIR1M-v2.0</td>
-    <td>Gaofen Series, Google Earth</td>
-    <td>0.3m – 0.8m</td>
-    <td>6,413</td>
-    <td>37,997</td>
-    <td>2,932</td>
-    <td>27,703</td>
-  </tr>
-  <tr>
-    <td>ShipRSImageNet</td>
-    <td>WorldView-3, GF-2, JL-1</td>
-    <td>0.12m – 6.0m</td>
-    <td>2,709</td>
-    <td>11,834</td>
-    <td>692</td>
-    <td>3,459</td>
-  </tr>
-  <tr>
-    <td><strong>Total</strong></td>
-    <td>–</td>
-    <td>–</td>
-    <td><strong>12,809</strong></td>
-    <td><strong>144,115</strong></td>
-    <td><strong>4,519</strong></td>
-    <td><strong>64,544</strong></td>
-  </tr>
-</table>
+| Config | Description |
+|:--|:--|
+| `ultralytics/cfg/models/v9/lim-yolo.yaml` | **LiM-YOLO** adds Group Normalization to the auxiliary information path (GN-CBLinear). |
+| `ultralytics/cfg/models/v9/lim-yolo-rb.yaml` | **LiM-YOLO-RB** (Reversible Branch) restores YOLOv9's auxiliary reversible branch on top of LiM-YOLO. |
+| `ultralytics/cfg/models/v9/lim-yolo-rb-w.yaml` | **LiM-YOLO-RB-W** (Reversible Branch, Wide) widens the P₄ stage to 1024 channels on top of LiM-YOLO-RB. |
 
-<p align="center"><em>Table III from the paper: Details of the preprocessed datasets used in experiments.</em></p>
-
-## Model Configuration
-
-The core configuration file for the proposed **LiM-YOLO** model can be found at:
-
-```
-ultralytics/cfg/models/v9/lim-yolo.yaml
-```
-
-This configuration includes:
-* **P2–P4 Head Structure**: Optimized for small ship detection (Stride 4, 8, 16).
-* **Pruned P5**: Removed stride-32 backbone and head to eliminate receptive field redundancy.
-* **GN-CBLinear**: Group Normalization appended after the 1×1 convolution in the PGI auxiliary branch, following the standard Conv→GN ordering.
+Ultralytics' YOLOv9-E port omits the auxiliary reversible branch of the original [WongKinYiu/yolov9](https://github.com/WongKinYiu/yolov9). LiM-YOLO-RB restores it.
 
 ## Installation
 
@@ -96,168 +32,78 @@ cd LiM-YOLO
 pip install -e .
 ```
 
-## Training
+## Usage
 
-LiM-YOLO is built on top of the [Ultralytics](https://github.com/ultralytics/ultralytics) framework. You can train the model using either the Python API or the CLI.
+LiM-YOLO uses the standard Ultralytics API. Example scripts are under `ultralytics/examples/`. Edit the data and weights paths inside before running.
 
-### Python API
-
-```python
-from ultralytics import YOLO
-
-# Initialize model from the LiM-YOLO config
-model = YOLO("ultralytics/cfg/models/v9/lim-yolo.yaml")
-
-# Train
-results = model.train(
-    data="your_dataset.yaml",        # Path to your dataset config
-    epochs=100,
-    imgsz=1024,
-    batch=2,                          # Adjust based on GPU memory
-    device=0,                         # GPU device id (e.g., 0, [0,1] for multi-GPU)
-    workers=16,
-    optimizer="Adam",
-    lr0=0.001,
-    lrf=0.0001,
-    seed=0,
-    pretrained=False,
-    single_cls=False,                 # Set True for single-class datasets
-    # Disable augmentations (as used in the paper)
-    hsv_h=0.0,
-    hsv_s=0.0,
-    hsv_v=0.0,
-    augment=False,
-    plots=True,
-    save_json=True,
-    name="lim-yolo-experiment",
-)
-```
-
-### CLI
-
-```bash
-yolo obb train \
-    model=ultralytics/cfg/models/v9/lim-yolo.yaml \
-    data=your_dataset.yaml \
-    epochs=100 \
-    imgsz=1024 \
-    batch=2 \
-    device=0 \
-    optimizer=Adam \
-    lr0=0.001 \
-    lrf=0.0001 \
-    seed=0 \
-    pretrained=False \
-    hsv_h=0.0 hsv_s=0.0 hsv_v=0.0 \
-    augment=False \
-    name=lim-yolo-experiment
-```
-
-### Dataset Configuration
-
-Prepare a YAML file for your dataset following the [Ultralytics OBB format](https://docs.ultralytics.com/datasets/obb/). For example, a DOTA-v1.5 config would look like:
-
-```yaml
-path: /path/to/DOTAv1.5       # Dataset root directory
-train: images/train            # Train images (relative to 'path')
-val: images/val                # Val images (relative to 'path')
-test: images/test              # Test images (optional)
-
-names:
-  0: plane
-  1: ship
-  2: storage tank
-  # ... (see ultralytics/cfg/datasets/DOTAv1.5.yaml for the full class list)
-```
-
-### Training Notes
-
-- **Batch size**: We used `batch=2` with 1024×1024 input resolution on a single NVIDIA RTX A6000 (48 GB). Adjust according to your GPU memory.
-- **Augmentations**: Color augmentations (`hsv_h`, `hsv_s`, `hsv_v`) and additional augmentations (`augment`) are disabled by default to match the paper's settings.
-- **Multi-GPU**: Pass a list of device ids (e.g., `device=[0,1]`) for data-parallel training.
-- **Optimizer**: Adam with an initial learning rate of `0.001` decayed to `0.0001` over 100 epochs via cosine annealing.
-
-## Inference
-
-### Predict on Images
-
-```python
-from ultralytics import YOLO
-
-# Load a trained model
-model = YOLO("path/to/best.pt")
-
-# Run inference
-results = model.predict(
-    source="path/to/images",     # Image file, directory, or glob pattern
-    imgsz=1024,
-    conf=0.25,                   # Confidence threshold
-    iou=0.7,                     # NMS IoU threshold
-    save=True,                   # Save annotated images
-    save_txt=True,               # Save results in txt format
-)
-```
-
-### CLI
-
-```bash
-yolo obb predict \
-    model=path/to/best.pt \
-    source=path/to/images \
-    imgsz=1024 \
-    conf=0.25 \
-    iou=0.7 \
-    save=True
-```
-
-### Validation
-
-```python
-from ultralytics import YOLO
-
-model = YOLO("path/to/best.pt")
-
-metrics = model.val(
-    data="your_dataset.yaml",
-    imgsz=1024,
-    batch=2,
-    save_json=True,
-)
-```
-
-```bash
-yolo obb val \
-    model=path/to/best.pt \
-    data=your_dataset.yaml \
-    imgsz=1024 \
-    batch=2
-```
-
-### Export
-
-```python
-from ultralytics import YOLO
-
-model = YOLO("path/to/best.pt")
-model.export(format="onnx", imgsz=1024)
-```
+- `train.py` trains a model from a config.
+- `predict.py` runs detection on images.
+- `inference.py` validates a trained model.
 
 ## Results
 
-### Comparison with State-of-the-Art Models
+Inference time is the average per-image forward time on a single NVIDIA RTX A6000, excluding preprocessing and postprocessing. At inference, the auxiliary branch of LiM-YOLO-RB and LiM-YOLO-RB-W is omitted.
 
-Evaluated on the Integrated Ship Detection Dataset (all four datasets combined). The best results are highlighted in **bold**.
+### Per-dataset ablation
 
-| Model | Params (M) | GFLOPs | Speed (ms/img) | F1 | Precision | Recall | mAP<sup>50</sup> | mAP<sup>50-95</sup> |
-|:------|:----------:|:------:|:---------------:|:---:|:---------:|:------:|:-----------------:|:--------------------:|
+#### SODA-A
+| Configuration | Params (M) | GFLOPs | Time (ms) | F1 | Prec. | Rec. | mAP<sub>50</sub> | mAP<sub>50-95</sub> |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| P₃ P₄ P₅ | 58.99 | 196.4 | 24.1 | 0.828 | 0.906 | 0.763 | 0.849 | 0.637 |
+| P₂ P₃ P₄ P₅ | 57.41 | 230.2 | 29.9 | 0.833 | 0.909 | 0.769 | 0.855 | 0.656 |
+| P₂ P₃ P₄ | 21.16 | 189.4 | 25.9 | 0.836 | 0.907 | 0.775 | 0.856 | 0.660 |
+| P₂ P₃ | 16.15 | 173.4 | 24.5 | 0.832 | 0.907 | 0.769 | 0.860 | 0.660 |
+| **LiM-YOLO** (P₂ P₃ P₄ + GN-CBLinear) | 21.16 | 189.4 | 26.9 | 0.829 | 0.905 | 0.765 | 0.861 | 0.662 |
+| **LiM-YOLO-RB** | 21.16 | 189.4 | 26.9 | 0.835 | 0.909 | 0.771 | 0.861 | 0.678 |
+| **LiM-YOLO-RB-W** | 22.84 | 194.8 | 27.5 | 0.836 | 0.911 | 0.773 | 0.863 | 0.682 |
+
+#### DOTA-v1.5
+| Configuration | Params (M) | GFLOPs | Time (ms) | F1 | Prec. | Rec. | mAP<sub>50</sub> | mAP<sub>50-95</sub> |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| P₃ P₄ P₅ | 58.99 | 196.4 | 24.6 | 0.883 | 0.942 | 0.831 | 0.913 | 0.736 |
+| P₂ P₃ P₄ P₅ | 57.41 | 230.2 | 29.9 | 0.883 | 0.936 | 0.836 | 0.915 | 0.738 |
+| P₂ P₃ P₄ | 21.16 | 189.4 | 25.8 | 0.891 | 0.940 | 0.847 | 0.923 | 0.744 |
+| P₂ P₃ | 16.15 | 173.4 | 24.8 | 0.889 | 0.936 | 0.846 | 0.921 | 0.740 |
+| **LiM-YOLO** (P₂ P₃ P₄ + GN-CBLinear) | 21.16 | 189.4 | 27.2 | 0.892 | 0.933 | 0.853 | 0.925 | 0.750 |
+| **LiM-YOLO-RB** | 21.16 | 189.4 | 27.2 | 0.887 | 0.932 | 0.846 | 0.921 | 0.757 |
+| **LiM-YOLO-RB-W** | 22.84 | 194.8 | 27.8 | 0.888 | 0.938 | 0.843 | 0.924 | 0.762 |
+
+#### FAIR1M
+| Configuration | Params (M) | GFLOPs | Time (ms) | F1 | Prec. | Rec. | mAP<sub>50</sub> | mAP<sub>50-95</sub> |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| P₃ P₄ P₅ | 59.00 | 196.4 | 24.4 | 0.422 | 0.388 | 0.463 | 0.395 | 0.285 |
+| P₂ P₃ P₄ P₅ | 57.41 | 230.3 | 30.8 | 0.421 | 0.381 | 0.471 | 0.392 | 0.284 |
+| P₂ P₃ P₄ | 21.16 | 189.5 | 25.8 | 0.437 | 0.404 | 0.477 | 0.402 | 0.290 |
+| P₂ P₃ | 16.15 | 173.5 | 24.9 | 0.441 | 0.406 | 0.483 | 0.414 | 0.301 |
+| **LiM-YOLO** (P₂ P₃ P₄ + GN-CBLinear) | 21.16 | 189.5 | 26.7 | 0.447 | 0.416 | 0.482 | 0.418 | 0.302 |
+| **LiM-YOLO-RB** | 21.16 | 189.5 | 26.7 | 0.441 | 0.406 | 0.482 | 0.412 | 0.307 |
+| **LiM-YOLO-RB-W** | 22.84 | 194.9 | 27.3 | 0.437 | 0.393 | 0.491 | 0.410 | 0.307 |
+
+#### ShipRSImageNet
+| Configuration | Params (M) | GFLOPs | Time (ms) | F1 | Prec. | Rec. | mAP<sub>50</sub> | mAP<sub>50-95</sub> |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| P₃ P₄ P₅ | 59.01 | 196.5 | 24.6 | 0.527 | 0.514 | 0.541 | 0.516 | 0.414 |
+| P₂ P₃ P₄ P₅ | 57.42 | 230.4 | 30.0 | 0.514 | 0.496 | 0.534 | 0.526 | 0.415 |
+| P₂ P₃ P₄ | 21.17 | 189.6 | 26.1 | 0.536 | 0.515 | 0.558 | 0.534 | 0.428 |
+| P₂ P₃ | 16.16 | 173.6 | 25.2 | 0.515 | 0.499 | 0.532 | 0.524 | 0.325 |
+| **LiM-YOLO** (P₂ P₃ P₄ + GN-CBLinear) | 21.17 | 189.6 | 26.9 | 0.574 | 0.548 | 0.601 | 0.578 | 0.448 |
+| **LiM-YOLO-RB** | 21.17 | 189.6 | 26.9 | 0.552 | 0.554 | 0.549 | 0.570 | 0.470 |
+| **LiM-YOLO-RB-W** | 22.85 | 195.0 | 27.5 | 0.589 | 0.593 | 0.585 | 0.580 | 0.482 |
+
+### Comparison with state-of-the-art models
+
+Evaluated on the Integrated Ship Detection Dataset (all four datasets combined).
+
+| Model | Params (M) | GFLOPs | Time (ms) | F1 | Prec. | Rec. | mAP<sub>50</sub> | mAP<sub>50-95</sub> |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | YOLOv8x | 69.47 | 263.9 | 17.8 | 0.777 | 0.825 | 0.734 | 0.816 | 0.566 |
 | YOLOv10x | 30.78 | 166.9 | 18.0 | 0.756 | 0.811 | 0.708 | 0.796 | 0.543 |
 | YOLO11x | 58.78 | 203.8 | 18.6 | 0.764 | 0.822 | 0.713 | 0.805 | 0.554 |
 | YOLOv12x | 61.02 | 208.1 | 36.7 | 0.721 | 0.793 | 0.662 | 0.748 | 0.494 |
 | RT-DETR-X | 70.38 | 278.2 | 19.8 | 0.755 | 0.819 | 0.699 | 0.793 | 0.545 |
-| **LiM-YOLO (Ours)** | **21.16** | **189.4** | **26.7** | **0.791** | **0.839** | **0.748** | **0.832** | **0.600** |
-
-<p align="center"><em>Table VIII from the paper: Comparison with state-of-the-art models on the Integrated Ship Detection Dataset.</em></p>
+| **LiM-YOLO** | 21.16 | 189.4 | 26.7 | 0.791 | 0.839 | 0.748 | 0.832 | 0.600 |
+| **LiM-YOLO-RB** | 21.16 | 189.4 | 26.7 | 0.798 | 0.846 | 0.755 | 0.838 | 0.631 |
+| **LiM-YOLO-RB-W** | 22.84 | 194.8 | 27.3 | 0.797 | 0.847 | 0.753 | 0.838 | 0.631 |
 
 ### Qualitative Results
 
@@ -265,7 +111,7 @@ Evaluated on the Integrated Ship Detection Dataset (all four datasets combined).
   <tr>
     <th>Dataset</th>
     <th>Baseline (YOLOv9-E)</th>
-    <th>LiM-YOLO (Ours)</th>
+    <th>LiM-YOLO</th>
     <th>Ground Truth</th>
   </tr>
   <tr>
@@ -294,16 +140,12 @@ Evaluated on the Integrated Ship Detection Dataset (all four datasets combined).
   </tr>
 </table>
 
-<p align="center"><em>Fig. 6 from the paper: Qualitative comparison of detection results across four remote sensing datasets. OBBs are overlaid on the images. For single-class datasets, class labels and confidence scores are omitted for clarity.</em></p>
-
 ## Citation
 
-If you find this work useful, please cite our paper:
-
 ```bibtex
-@article{kim2025limyolo,
-  title={LiM-YOLO: Less is More with Pyramid Level Shift and Normalized Auxiliary Branch for Ship Detection in Optical Remote Sensing Imagery},
-  author={Kim, Seon-Hoon and Sim, Hyeji and Jung, Youeyun and Jung, Okchul and Kim, Yerin},
+@article{kim2025lim,
+  title={LiM-YOLO: Less is More with Pyramid Level Shift for Ship Detection in Optical Remote Sensing},
+  author={Kim, Seon-Hoon and Kim, Yerin and Sim, Hyeji and Jung, Youeyun and Jung, Ok-Chul and Chung, Daewon},
   journal={arXiv preprint arXiv:2512.09700},
   year={2025}
 }
