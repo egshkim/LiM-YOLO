@@ -10,7 +10,7 @@ This repository is the **official implementation** of the following paper.
 
 ## Introduction
 
-**LiM-YOLO** is an oriented ship detector for high-resolution optical satellite imagery, built on YOLOv9-E. Ships are small and high-aspect-ratio, and the stride-32 pyramid level (P₅) compresses narrow vessels into sub-pixel features. LiM-YOLO applies a **Pyramid Level Shift** that moves the detection heads from P₃P₄P₅ (strides 8/16/32) to P₂P₃P₄ (strides 4/8/16). This adds a high-resolution P₂ head and removes the P₅ head and backbone stage. It also adds a **GN-CBLinear** module that places Group Normalization after the 1×1 convolution in the YOLOv9 auxiliary projection, which stabilizes training under the micro-batch regime required by 1024×1024 satellite tiles.
+**LiM-YOLO** is an oriented ship detector for high-resolution optical satellite imagery, built on YOLOv9-E. Ships are small and high-aspect-ratio, and the stride-32 pyramid level (P₅) compresses narrow vessels into sub-pixel features. LiM-YOLO applies a **Pyramid Level Shift** that moves the detection heads from P₃P₄P₅ (strides 8/16/32) to P₂P₃P₄ (strides 4/8/16). This adds a high-resolution P₂ head and removes the P₅ head and backbone stage. It also adds a **GN-CBLinear** module that places Group Normalization after the 1×1 convolution of YOLOv9-E's composite-backbone projection (CBLinear), which stabilizes training under the micro-batch regime required by 1024×1024 satellite tiles.
 
 This repository also provides **LiM-YOLO-RB** (Reversible Branch) and **LiM-YOLO-RB-W** (Reversible Branch, Wide), two extensions that restore YOLOv9's auxiliary reversible branch (see [Models](#models)).
 
@@ -18,11 +18,13 @@ This repository also provides **LiM-YOLO-RB** (Reversible Branch) and **LiM-YOLO
 
 | Config | Description |
 |:--|:--|
-| `ultralytics/cfg/models/v9/lim-yolo.yaml` | **LiM-YOLO** adds Group Normalization to the auxiliary information path (GN-CBLinear). |
+| `ultralytics/cfg/models/v9/lim-yolo.yaml` | **LiM-YOLO** adds Group Normalization to the composite-backbone projection (GN-CBLinear). |
 | `ultralytics/cfg/models/v9/lim-yolo-rb.yaml` | **LiM-YOLO-RB** (Reversible Branch) restores YOLOv9's auxiliary reversible branch on top of LiM-YOLO. |
 | `ultralytics/cfg/models/v9/lim-yolo-rb-w.yaml` | **LiM-YOLO-RB-W** (Reversible Branch, Wide) widens the P₄ stage to 1024 channels on top of LiM-YOLO-RB. |
 
 Ultralytics' YOLOv9-E port omits the auxiliary reversible branch of the original [WongKinYiu/yolov9](https://github.com/WongKinYiu/yolov9). LiM-YOLO-RB restores it.
+
+> **Terminology.** CBLinear and CBFuse form a CBNet-style composite backbone ([Liang et al., IEEE TIP 2022](https://doi.org/10.1109/TIP.2022.3216771)) inside YOLOv9-E. CBLinear is a 1×1 linear projection and CBFuse is a parameter-free resample-and-sum fusion. They are retained at inference, unlike PGI's multi-level auxiliary information, which is used only during training. GN-CBLinear adds Group Normalization to the CBLinear projection.
 
 ## Installation
 

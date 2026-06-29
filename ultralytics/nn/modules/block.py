@@ -1014,8 +1014,11 @@ class CBLinear(nn.Module):
 
 class CBLinear_GN_woSILU(nn.Module):
     """
-    CBLinear with GroupNorm ONLY (No Activation).
-    To keep the philosophy of YOLOv9 PGI (information preservation)
+    CBLinear with GroupNorm only (no activation).
+    CBLinear is the linear projection of YOLOv9-E's CBNet-style composite backbone
+    (Liang et al., 2022), not PGI's multi-level auxiliary information. GroupNorm is
+    added after the 1x1 convolution to stabilize micro-batch training while keeping
+    the projection information-preserving (no nonlinear distortion).
     Proposed by: Seon-Hoon Kim et al., 2025. https://arxiv.org/pdf/2512.09700
     """
     def __init__(self, c1: int, c2s: List[int], k: int = 1, s: int = 1, p: Optional[int] = None, g: int = 1):

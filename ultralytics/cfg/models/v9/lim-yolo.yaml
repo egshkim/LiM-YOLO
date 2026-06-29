@@ -2,7 +2,7 @@
 # 
 # Copyright (c) 2025 Seon-Hoon Kim (KARI/UST). All rights reserved.
 # Paper link: https://arxiv.org/pdf/2512.09700
-# Paper title: LiM-YOLO: Less is More with Pyramid Level Shift and Normalized Auxiliary Branch  for Ship Detection in Optical Remote Sensing Imagery
+# Paper title: LiM-YOLO: Less is More with Pyramid Level Shift for Ship Detection in Optical Remote Sensing
 # -----------------------------------------------------------------------
 # Based on Ultralytics YOLOv9 (AGPL-3.0 License) - https://ultralytics.com
 # Original Config: YOLOv9e object detection model
@@ -23,7 +23,7 @@ backbone:
   - [-1, 1, ADown, [512]]  # 6-P4/16
   - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]  # 7 (P4 final)
   
-  # Auxiliary branch
+  # Composite backbone (CBLinear / CBFuse)
   - [1, 1, CBLinear_GN_woSILU, [[64]]]  # 8
   - [3, 1, CBLinear_GN_woSILU, [[64, 128]]]  # 9
   - [5, 1, CBLinear_GN_woSILU, [[64, 128, 256]]]  # 10
